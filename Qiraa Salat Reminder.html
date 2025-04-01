@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Qiraa Salat Reminder</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <style>
+      /* Basic Styles */
+      body { font-family: 'Inter', sans-serif; }
+      input[type="time"] { color-scheme: light; }
+      .error-message { color: #dc2626; font-size: 0.9em; margin-top: 5px; }
+      .status-message { font-size: 0.9em; margin-top: 5px; }
+      .loading-indicator { display: none; }
+      /* Styled Text Logo Placeholder */
+      .logo-placeholder { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 9999px; background: linear-gradient(135deg, #10b981, #0d9488); color: white; font-size: 1.5rem; font-weight: 600; line-height: 1; border: 1px solid rgba(255, 255, 255, 0.3); }
+      /* Popup Styles */
+      #notification-popup { transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out; max-height: 80vh; overflow-y: auto; }
+      .popup-separator { border: none; border-top: 1px solid rgba(255, 255, 255, 0.3); margin: 10px 0; }
+      #notification-popup .hadith-text { font-size: 0.9em; }
+      #notification-popup .hadith-ref { font-size: 0.75em; }
+      .play-button { background-color: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.5); border-radius: 50%; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; margin-left: 8px; cursor: pointer; transition: background-color 0.2s; }
+      .play-button:hover { background-color: rgba(255, 255, 255, 0.4); }
+      .play-button svg { width: 0.8rem; height: 0.8rem; fill: white; } /* SVG size in play button */
+      .tts-label { font-size: 0.8rem; color: rgba(255, 255, 255, 0.8); margin-right: 4px;}
+      /* Persistent Reminder Styles */
+      #persistent-reminder { margin-top: 2rem; padding: 1rem; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.75rem; }
+      #persistent-reminder h3 { font-size: 1.1rem; font-weight: 600; color: #047857; margin-bottom: 0.75rem; text-align: center; }
+      #persistent-reminder hr { border: none; border-top: 1px solid #e2e8f0; margin: 0.75rem 0; }
+      #persistent-reminder p { margin-bottom: 0.25rem; color: #475569; font-size: 0.9rem; line-height: 1.4; }
+      #persistent-reminder .ref { font-size: 0.8rem; color: #059669; text-align: right; margin-top: 0.1rem; margin-bottom: 0.5rem; }
+      #persistent-reminder .arabic { text-align: right; font-size: 1rem; color: #334155; }
+      #refresh-reminder-button { display: block; margin: 1rem auto 0; background-color: #0d9488; color: white; padding: 6px 12px; border-radius: 6px; font-size: 0.85rem; border: none; cursor: pointer; transition: background-color 0.2s; }
+      #refresh-reminder-button:hover { background-color: #0f766e; }
+      /* Geolocation Styles */
+      #location-section { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e2e8f0; text-align: center; }
+      #use-location-button { background-color: #3b82f6; color: white; padding: 6px 12px; border-radius: 6px; font-size: 0.85rem; border: none; cursor: pointer; transition: background-color 0.2s; }
+      #use-location-button:hover { background-color: #2563eb; }
+      #location-status { font-size: 0.85rem; margin-top: 0.5rem; color: #475569; min-height: 2.5em; }
+       /* Test Popup Button Style */
+       #test-popup-button { background-color: #f59e0b; color: white; padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; margin-top: 8px; border: none; cursor: pointer; transition: background-color 0.2s; }
+        #test-popup-button:hover { background-color: #d97706; }
+       /* SVG icon general style within buttons */
+       button svg { display: inline-block; vertical-align: middle; width: 1em; height: 1em; margin-right: 0.3em; fill: currentColor; } /* Use fill for solid icons */
+       /* Ensure play button SVG inherits color */
+       .play-button svg { fill: white; }
+    </style>
+    <script>
+      // Optional: Configure Tailwind
+      // tailwind.config = { /* ... */ }
+    </script>
+</head>
+<body class="bg-gradient-to-br from-emerald-50 to-teal-100 min-h-screen flex items-center justify-center p-4 font-sans">
+
+    <div class="bg-white rounded-xl shadow-lg p-6 md:p-8 w-full max-w-2xl">
+        <div class="flex items-center justify-center mb-4 space-x-3"> <div class="logo-placeholder">Q</div> <h1 class="text-3xl font-bold text-center text-emerald-700">Qiraa Salat Reminder</h1> </div>
+        <p class="text-center text-sm text-gray-500 mb-6">(Default Times: Abuja, Nigeria)</p>
+
+        <div class="text-center mb-6"> <p class="text-lg text-gray-600">Current Time:</p> <p id="current-time" class="text-4xl font-semibold text-teal-600 tabular-nums">--:--:--</p> </div>
+
+        <div class="text-center mb-8 p-4 bg-emerald-100 rounded-lg border border-emerald-200"> <p class="text-lg font-medium text-emerald-800">Next Prayer:</p> <p id="next-prayer-name" class="text-2xl font-bold text-emerald-700">-</p> <p id="next-prayer-time" class="text-xl text-emerald-600">at --:--</p> <p id="time-remaining" class="text-lg text-emerald-500 mt-2 font-medium tabular-nums">--:--:-- remaining</p> <p id="next-prayer-error" class="error-message"></p> </div>
+
+        <div class="mb-8">
+             <h2 class="text-xl font-semibold text-gray-700 mb-4 text-center border-b pb-2">Prayer Times</h2>
+             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+                 <div class="text-center"> <label for="fajr" class="block text-sm font-medium text-gray-700 mb-1">Fajr</label> <input type="time" id="fajr" name="fajr" value="05:12" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-emerald-500 focus:border-emerald-500 text-center"> </div>
+                 <div class="text-center"> <label for="dhuhr" class="block text-sm font-medium text-gray-700 mb-1">Dhuhr</label> <input type="time" id="dhuhr" name="dhuhr" value="12:34" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-emerald-500 focus:border-emerald-500 text-center"> </div>
+                 <div class="text-center"> <label for="asr" class="block text-sm font-medium text-gray-700 mb-1">Asr</label> <input type="time" id="asr" name="asr" value="15:44" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-emerald-500 focus:border-emerald-500 text-center"> </div>
+                 <div class="text-center"> <label for="maghrib" class="block text-sm font-medium text-gray-700 mb-1">Maghrib</label> <input type="time" id="maghrib" name="maghrib" value="18:44" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-emerald-500 focus:border-emerald-500 text-center"> </div>
+                 <div class="text-center"> <label for="isha" class="block text-sm font-medium text-gray-700 mb-1">Isha</label> <input type="time" id="isha" name="isha" value="19:49" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-emerald-500 focus:border-emerald-500 text-center"> </div>
+             </div>
+             <div id="location-section">
+                 <button id="use-location-button">
+                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M9 11a3 3 0 1 0 6 0a3 3 0 0 0 -6 0" /><path d="M17.657 16.657l-4.243 4.243a2 2 0 0 1 -2.827 0l-4.244 -4.243a8 8 0 1 1 11.314 0z" /></svg>
+                     Use My Current Location
+                 </button>
+                 <p id="location-status"></p>
+             </div>
+             <div class="text-center mt-4">
+                 <button id="save-times" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-5 rounded-lg shadow transition duration-200 ease-in-out inline-flex items-center">
+                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M6 4h10l4 4v10a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2" /><circle cx="12" cy="14" r="2" /><polyline points="14 4 14 8 8 8 8 4" /></svg>
+                     Save Times
+                 </button>
+                 <p id="save-status" class="status-message text-green-600 mt-1"></p>
+             </div>
+        </div>
+
+         <div class="text-center mb-8 border-t border-gray-200 pt-6">
+            <button id="enable-notifications" class="bg-teal-500 hover:bg-teal-600 text-white font-semibold py-2 px-4 rounded-lg shadow transition duration-200 ease-in-out inline-flex items-center">
+                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M10 5a2 2 0 1 1 4 0a7 7 0 0 1 4 6v3a4 4 0 0 0 2 3h-16a4 4 0 0 0 2 -3v-3a7 7 0 0 1 4 -6" /><path d="M9 17v1a3 3 0 0 0 6 0v-1" /></svg>
+                 Check/Enable Notifications & Audio
+            </button>
+            <p id="notification-status" class="status-message text-gray-500 mt-2"></p>
+            <p id="audio-status" class="status-message text-gray-500 mt-1"></p>
+            <p id="tts-error" class="error-message"></p>
+            <button id="test-popup-button">Test In-App Popup</button>
+        </div>
+
+        <div id="persistent-reminder">
+            <h3>Daily Reminders</h3>
+            <div> <p id="main-verse-en" class="italic"></p> <p id="main-verse-ar" class="arabic" dir="rtl"></p> <p id="main-verse-ref" class="ref"></p> </div>
+            <hr>
+            <div> <p id="main-hadith-en" class="italic"></p> <p id="main-hadith-ar" class="arabic" dir="rtl"></p> <p id="main-hadith-ref" class="ref"></p> </div>
+            <button id="refresh-reminder-button">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4" /><path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4" /></svg>
+                Show Next Reminder
+            </button>
+        </div>
+
+        <div class="mt-8 pt-4 border-t border-gray-200 text-center">
+            <p class="text-xs text-gray-500">Powered by Unimedium Digital</p>
+        </div>
+
+    </div> <div id="notification-popup" class="fixed bottom-5 right-5 bg-emerald-600 text-white p-4 rounded-lg shadow-xl opacity-0 transform translate-y-10 pointer-events-none max-w-sm z-50 max-h-[80vh] overflow-y-auto">
+         <div class="flex items-start">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6 mr-3 flex-shrink-0 pt-1 text-white"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M10 5a2 2 0 1 1 4 0a7 7 0 0 1 4 6v3a4 4 0 0 0 2 3h-16a4 4 0 0 0 2 -3v-3a7 7 0 0 1 4 -6" /><path d="M9 17v1a3 3 0 0 0 6 0v-1" /></svg>
+            <div class="flex-grow">
+                <h3 id="popup-title" class="font-bold text-lg mb-1">Prayer Time!</h3>
+                <p id="popup-message" class="text-sm mb-2"></p>
+                <div class="border-t border-emerald-400 pt-2">
+                    <p id="popup-verse-en" class="text-sm italic mb-1"></p>
+                    <p id="popup-verse-ar" class="text-sm text-right mb-2" dir="rtl"></p>
+                    <p id="popup-verse-ref" class="text-xs text-emerald-200 text-right mb-2"></p>
+                    <div id="tts-buttons-quran" class="mt-1 text-right"></div>
+                </div>
+                 <hr class="popup-separator">
+                 <div>
+                      <p id="popup-hadith-en" class="hadith-text italic mb-1"></p>
+                      <p id="popup-hadith-ar" class="hadith-text text-right mb-2" dir="rtl"></p>
+                      <p id="popup-hadith-ref" class="hadith-ref text-emerald-200 text-right mb-2"></p>
+                      <div id="tts-buttons-hadith" class="mt-1 text-right"></div>
+                 </div>
+            </div>
+             <button id="close-popup" class="ml-2 p-1 text-emerald-200 hover:text-white flex-shrink-0">&times;</button>
+         </div>
+    </div>
+
+    <script>
+        // --- Constants ---
+        const DEBUG = false;
+        const REMINDER_REFRESH_INTERVAL = 60000;
+
+        // --- Utility Functions ---
+        function logDebug(message, ...args) { if (DEBUG) console.log(`[Salat Reminder] ${message}`, ...args); }
+        function logError(message, error) { console.error(`[Salat Reminder ERROR] ${message}`, error); }
+        function formatTime(date) { const h = String(date.getHours()).padStart(2, '0'); const m = String(date.getMinutes()).padStart(2, '0'); return `${h}:${m}`; }
+        function formatTimeWithSeconds(date) { const h = String(date.getHours()).padStart(2, '0'); const m = String(date.getMinutes()).padStart(2, '0'); const s = String(date.getSeconds()).padStart(2, '0'); return `${h}:${m}:${s}`; }
+
+        // --- State Variables ---
+        let prayerTimes = {}; let nextPrayer = null; let notificationPermission = 'default';
+        let clockInterval; let checkPrayerInterval; let mainReminderInterval;
+        let audioContextStarted = false; let synth; let currentVerseIndexPopup = 0; let currentHadithIndexPopup = 0;
+        let currentVerseIndexMain = 0; let currentHadithIndexMain = 0;
+        let isSpeechApiAvailable = ('speechSynthesis' in window); let voicesLoaded = false;
+        let currentDisplayedVersePopup = null; let currentDisplayedHadithPopup = null;
+
+        // --- Reminder Data ---
+        const quranVerses = [
+             { en: "Guard strictly the prayers...", ar: "حَافِظُوا عَلَى الصَّلَوَاتِ...", ref: "Quran 2:238" }, { en: "Recite... and establish prayer...", ar: "اتْلُ مَا أُوحِيَ إِلَيْكَ...", ref: "Quran 29:45" }, { en: "Successful indeed are the believers...", ar: "قَدْ أَفْلَحَ الْمُؤْمِنُونَ...", ref: "Quran 23:1-2" }, { en: "So woe to those who pray...", ar: "فَوَيْلٌ لِّلْمُصَلِّينَ...", ref: "Quran 107:4-5" }, { en: "Indeed, I am Allah... establish prayer...", ar: "إِنَّنِي أَنَا اللَّهُ...", ref: "Quran 20:14" } ];
+        const hadithReminders = [
+            { en: "Between a man and Shirk... is the abandonment of the Salat.", ar: "‏ إِنَّ بَيْنَ الرَّجُلِ...", ref: "Sahih Muslim 82a" }, { en: "The first thing... brought to account... will be his prayer...", ar: "أَوَّلَ مَا يُحَاسَبُ بِهِ...", ref: "Jami` at-Tirmidhi 413" }, { en: "The prayer in congregation is twenty seven times superior...", ar: "صَلاَةُ الْجَمَاعَةِ تَفْضُلُ...", ref: "Sahih al-Bukhari 645" }, { en: "The key to Paradise is Salat...", ar: "مِفْتَاحُ الْجَنَّةِ الصَّلاَةُ...", ref: "Jami` at-Tirmidhi 4" } ];
+
+        // --- DOM Element References ---
+        // (Variables assigned in initializeDOMElements)
+        let currentTimeElem, nextPrayerNameElem, nextPrayerTimeElem, timeRemainingElem, nextPrayerErrorElem,
+            prayerInputs = {}, saveButton, saveStatusElem, enableNotificationsButton, notificationStatusElem,
+            audioStatusElem, ttsErrorElem, notificationPopup, popupTitle, popupMessage, popupVerseEn,
+            popupVerseAr, popupVerseRef, ttsButtonsQuranContainer, popupHadithEn, popupHadithAr,
+            popupHadithRef, ttsButtonsHadithContainer, closePopupButton, mainVerseEnElem, mainVerseArElem,
+            mainVerseRefElem, mainHadithEnElem, mainHadithArElem, mainHadithRefElem, refreshReminderButton,
+            useLocationButton, locationStatusElem, testPopupButton;
+
+        // --- Function to Get & Validate DOM Elements ---
+        function initializeDOMElements() {
+            logDebug("Initializing DOM Elements..."); const elementIds = [ 'current-time', 'next-prayer-name', 'next-prayer-time', 'time-remaining', 'next-prayer-error', 'fajr', 'dhuhr', 'asr', 'maghrib', 'isha', 'save-times', 'save-status', 'enable-notifications', 'notification-status', 'audio-status', 'tts-error', 'notification-popup', 'popup-title', 'popup-message', 'popup-verse-en', 'popup-verse-ar', 'popup-verse-ref', 'tts-buttons-quran', 'popup-hadith-en', 'popup-hadith-ar', 'popup-hadith-ref', 'tts-buttons-hadith', 'close-popup', 'persistent-reminder', 'main-verse-en', 'main-verse-ar', 'main-verse-ref', 'main-hadith-en', 'main-hadith-ar', 'main-hadith-ref', 'refresh-reminder-button', 'location-section', 'use-location-button', 'location-status', 'test-popup-button' ]; let allElementsFound = true; elementIds.forEach(id => { const element = document.getElementById(id); if (!element) { logError(`Critical Error: Could not find element with ID: ${id}`); allElementsFound = false; } window[id.replace(/-/g, '_') + 'Elem'] = element; }); currentTimeElem = window.current_timeElem; nextPrayerNameElem = window.next_prayer_nameElem; nextPrayerTimeElem = window.next_prayer_timeElem; timeRemainingElem = window.time_remainingElem; nextPrayerErrorElem = window.next_prayer_errorElem; prayerInputs = { Fajr: window.fajrElem, Dhuhr: window.dhuhrElem, Asr: window.asrElem, Maghrib: window.maghribElem, Isha: window.ishaElem }; saveButton = window.save_timesElem; saveStatusElem = window.save_statusElem; enableNotificationsButton = window.enable_notificationsElem; notificationStatusElem = window.notification_statusElem; audioStatusElem = window.audio_statusElem; ttsErrorElem = window.tts_errorElem; notificationPopup = window.notification_popupElem; popupTitle = window.popup_titleElem; popupMessage = window.popup_messageElem; popupVerseEn = window.popup_verse_enElem; popupVerseAr = window.popup_verse_arElem; popupVerseRef = window.popup_verse_refElem; ttsButtonsQuranContainer = window.tts_buttons_quranElem; popupHadithEn = window.popup_hadith_enElem; popupHadithAr = window.popup_hadith_arElem; popupHadithRef = window.popup_hadith_refElem; ttsButtonsHadithContainer = window.tts_buttons_hadithElem; closePopupButton = window.close_popupElem; mainVerseEnElem = window.main_verse_enElem; mainVerseArElem = window.main_verse_arElem; mainVerseRefElem = window.main_verse_refElem; mainHadithEnElem = window.main_hadith_enElem; mainHadithArElem = window.main_hadith_arElem; mainHadithRefElem = window.main_hadith_refElem; refreshReminderButton = window.refresh_reminder_buttonElem; useLocationButton = window.use_location_buttonElem; locationStatusElem = window.location_statusElem; testPopupButton = window.test_popup_buttonElem; if (!allElementsFound) { throw new Error("One or more critical HTML elements were not found."); } logDebug("All required DOM elements found."); return true;
+        }
+
+        // --- Core Functions ---
+        async function initAudio() { if (!audioStatusElem) return false; audioStatusElem.textContent = 'Initializing audio...'; audioStatusElem.className = 'status-message text-gray-500 mt-1'; if (audioContextStarted) { audioStatusElem.textContent = 'Audio: Ready.'; audioStatusElem.className = 'status-message text-green-600 mt-1'; return true; } if (typeof Tone === 'undefined' || !Tone || !Tone.start) { audioStatusElem.textContent = 'Audio Error: Library not loaded.'; audioStatusElem.className = 'error-message mt-1'; return false; } try { await Tone.start(); synth = new Tone.Synth({ oscillator: { type: 'sine' }, envelope: { attack: 0.01, decay: 0.1, sustain: 0.1, release: 0.5 } }).toDestination(); audioContextStarted = true; audioStatusElem.textContent = 'Audio: Ready.'; audioStatusElem.className = 'status-message text-green-600 mt-1'; return true; } catch (error) { logError('Tone.start Error', error); audioStatusElem.textContent = 'Audio Error: Could not start context.'; audioStatusElem.className = 'error-message mt-1'; audioContextStarted = false; return false; } }
+        function playAlertSound() { if (!audioContextStarted || !synth) { return; } try { const now = Tone.now(); synth.triggerAttackRelease('C5', '8n', now); synth.triggerAttackRelease('G5', '8n', now + 0.2); } catch (error) { logError('Sound Play Error', error); if(audioStatusElem) { audioStatusElem.textContent = 'Audio Error: Playback failed.'; audioStatusElem.className = 'error-message mt-1'; } } }
+        function speakText(text, lang) { if (!ttsErrorElem) return; ttsErrorElem.textContent = ''; if (!isSpeechApiAvailable) { ttsErrorElem.textContent = 'TTS not supported.'; return; } try { window.speechSynthesis.cancel(); const utterance = new SpeechSynthesisUtterance(text); utterance.lang = lang; utterance.rate = 0.9; utterance.onerror = (event) => { logError(`TTS Error (${lang})`, event.error); ttsErrorElem.textContent = `Error speaking ${lang}. Voice unavailable?`; }; window.speechSynthesis.speak(utterance); } catch (error) { logError('TTS Speak Error', error); ttsErrorElem.textContent = 'Could not start TTS.'; } }
+        function updateMainReminderDisplay() { if (!mainVerseEnElem || !mainVerseArElem || !mainVerseRefElem || !mainHadithEnElem || !mainHadithArElem || !mainHadithRefElem || !hadithReminders || hadithReminders.length === 0 || !quranVerses || quranVerses.length === 0) { return; } try { const verseToShow = quranVerses[currentVerseIndexMain]; const hadithToShow = hadithReminders[currentHadithIndexMain]; mainVerseEnElem.textContent = `"${verseToShow.en}"`; mainVerseArElem.textContent = verseToShow.ar; mainVerseRefElem.textContent = `- ${verseToShow.ref}`; mainHadithEnElem.textContent = `"${hadithToShow.en}"`; mainHadithArElem.textContent = hadithToShow.ar; mainHadithRefElem.textContent = `- ${hadithToShow.ref}`; currentVerseIndexMain = (currentVerseIndexMain + 1) % quranVerses.length; currentHadithIndexMain = (currentHadithIndexMain + 1) % hadithReminders.length; } catch (error) { logError("Error updating main reminder", error); if(mainVerseEnElem) mainVerseEnElem.textContent = "Error loading reminder."; } }
+        function showPopup(prayerName) { if (!quranVerses || quranVerses.length === 0 || !hadithReminders || hadithReminders.length === 0 || !notificationPopup) return; try { const isTest = prayerName === 'Test Prayer'; currentDisplayedVersePopup = isTest ? quranVerses[Math.floor(Math.random() * quranVerses.length)] : quranVerses[currentVerseIndexPopup]; currentDisplayedHadithPopup = isTest ? hadithReminders[Math.floor(Math.random() * hadithReminders.length)] : hadithReminders[currentHadithIndexPopup]; if (!isTest) { currentVerseIndexPopup = (currentVerseIndexPopup + 1) % quranVerses.length; currentHadithIndexPopup = (currentHadithIndexPopup + 1) % hadithReminders.length; } if(popupTitle) popupTitle.textContent = isTest ? "Test In-App Alert!" : `Time for ${prayerName}!`; if(popupMessage) popupMessage.textContent = isTest ? "This is the alert that appears in the corner." : `It's time to perform the ${prayerName} prayer.`; if(popupVerseEn) popupVerseEn.textContent = `"${currentDisplayedVersePopup.en}"`; if(popupVerseAr) popupVerseAr.textContent = currentDisplayedVersePopup.ar; if(popupVerseRef) popupVerseRef.textContent = `- ${currentDisplayedVersePopup.ref}`; if(popupHadithEn) popupHadithEn.textContent = `"${currentDisplayedHadithPopup.en}"`; if(popupHadithAr) popupHadithAr.textContent = currentDisplayedHadithPopup.ar; if(popupHadithRef) popupHadithRef.textContent = `- ${currentDisplayedHadithPopup.ref}`; if(ttsButtonsQuranContainer) ttsButtonsQuranContainer.innerHTML = ''; if (isSpeechApiAvailable && ttsButtonsQuranContainer) { const btnEnQ = document.createElement('button'); btnEnQ.className = 'play-button'; btnEnQ.title = 'Play Quran (English)'; btnEnQ.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>'; btnEnQ.onclick = (e) => { e.stopPropagation(); if (currentDisplayedVersePopup) speakText(currentDisplayedVersePopup.en, 'en-US'); }; const btnArQ = document.createElement('button'); btnArQ.className = 'play-button'; btnArQ.title = 'Play Quran (Arabic)'; btnArQ.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>'; btnArQ.onclick = (e) => { e.stopPropagation(); if (currentDisplayedVersePopup) speakText(currentDisplayedVersePopup.ar, 'ar-SA'); }; ttsButtonsQuranContainer.appendChild(document.createTextNode('Speak Verse: ')); ttsButtonsQuranContainer.appendChild(btnEnQ); ttsButtonsQuranContainer.appendChild(btnArQ); } else if(ttsButtonsQuranContainer) { ttsButtonsQuranContainer.textContent = 'TTS not supported.'; } if(ttsButtonsHadithContainer) ttsButtonsHadithContainer.innerHTML = ''; if (isSpeechApiAvailable && ttsButtonsHadithContainer) { const btnEnH = document.createElement('button'); btnEnH.className = 'play-button'; btnEnH.title = 'Play Hadith (English)'; btnEnH.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>'; btnEnH.onclick = (e) => { e.stopPropagation(); if (currentDisplayedHadithPopup) speakText(currentDisplayedHadithPopup.en, 'en-US'); }; const btnArH = document.createElement('button'); btnArH.className = 'play-button'; btnArH.title = 'Play Hadith (Arabic)'; btnArH.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>'; btnArH.onclick = (e) => { e.stopPropagation(); if (currentDisplayedHadithPopup) speakText(currentDisplayedHadithPopup.ar, 'ar-SA'); }; ttsButtonsHadithContainer.appendChild(document.createTextNode('Speak Hadith: ')); ttsButtonsHadithContainer.appendChild(btnEnH); ttsButtonsHadithContainer.appendChild(btnArH); } else if(ttsButtonsHadithContainer) { ttsButtonsHadithContainer.textContent = 'TTS not supported.'; } notificationPopup.classList.remove('opacity-0', 'translate-y-10', 'pointer-events-none'); notificationPopup.classList.add('opacity-100', 'transform-none'); playAlertSound(); } catch (error) { logError("Popup Display/Content Error", error); } }
+        function hidePopup() { if (!notificationPopup) return; notificationPopup.classList.add('opacity-0', 'translate-y-10', 'pointer-events-none'); notificationPopup.classList.remove('opacity-100', 'transform-none'); if (isSpeechApiAvailable) { window.speechSynthesis.cancel(); } }
+        function showBrowserNotification(prayerName) { if (notificationPermission !== 'granted') { return; } if (!quranVerses || quranVerses.length === 0) return; try { const verseIndexToShow = currentVerseIndexPopup; const verseToShow = quranVerses[verseIndexToShow]; if (!verseToShow) return; const options = { body: `It's time for ${prayerName} prayer.\nReminder: "${verseToShow.en}" - ${verseToShow.ref}`, icon: 'https://placehold.co/72x72/10b981/ffffff?text=Salat', tag: `salat-reminder-${prayerName}-${new Date().getMinutes()}` }; new Notification(`Time for ${prayerName}!`, options); } catch (error) { logError("Browser Notification Error", error); } }
+        async function requestNotificationPermission() { const audioReady = await initAudio(); if ('Notification' in window) { let currentPermission = Notification.permission; if (currentPermission === 'granted') { notificationPermission = 'granted'; } else if (currentPermission === 'denied') { notificationPermission = 'denied'; } else { try { const permissionResult = await Notification.requestPermission(); notificationPermission = permissionResult; if (permissionResult === 'granted') { new Notification('Salat Reminders Enabled', { body: 'Browser notifications enabled.' + (audioReady ? ' Audio alerts also enabled.' : ' Audio init failed.'), icon: 'https://placehold.co/72x72/14b8a6/ffffff?text=OK' }); } } catch (error) { logError("Notification Permission Error", error); } } } updateUiDisplayAndButtonState(); }
+        function loadPrayerTimes() { const defaultTimes = { Fajr: "05:12", Dhuhr: "12:34", Asr: "15:44", Maghrib: "18:44", Isha: "19:49" }; try { const savedTimes = localStorage.getItem('qiraaPrayerTimes'); if (savedTimes) { let parsedTimes = JSON.parse(savedTimes); let validSaved = Object.keys(defaultTimes).every(key => parsedTimes[key] && /^\d{2}:\d{2}$/.test(parsedTimes[key])); if (validSaved) { prayerTimes = parsedTimes; } else { prayerTimes = { ...defaultTimes }; localStorage.setItem('qiraaPrayerTimes', JSON.stringify(prayerTimes)); } } else { prayerTimes = { ...defaultTimes }; localStorage.setItem('qiraaPrayerTimes', JSON.stringify(prayerTimes)); } Object.keys(prayerInputs).forEach(key => { if (prayerInputs[key]) prayerInputs[key].value = prayerTimes[key]; }); } catch (error) { logError('Error loading prayer times.', error); prayerTimes = { ...defaultTimes }; Object.keys(prayerInputs).forEach(key => { if (prayerInputs[key]) prayerInputs[key].value = prayerTimes[key]; }); } }
+        function savePrayerTimes(showStatus = true) { const loadingIndicator = saveButton?.querySelector('.loading-indicator'); const buttonText = saveButton?.querySelector('.button-text'); if(loadingIndicator) loadingIndicator.style.display = 'inline'; if(buttonText) buttonText.style.display = 'none'; if(saveButton) saveButton.disabled = true; if(saveStatusElem) { saveStatusElem.textContent = ''; saveStatusElem.className = 'status-message text-green-600 mt-1'; } try { const customTimes = { Fajr: prayerInputs.Fajr?.value, Dhuhr: prayerInputs.Dhuhr?.value, Asr: prayerInputs.Asr?.value, Maghrib: prayerInputs.Maghrib?.value, Isha: prayerInputs.Isha?.value }; for (const key in customTimes) { if (!customTimes[key] || !/^\d{2}:\d{2}$/.test(customTimes[key])) { prayerInputs[key]?.classList.add('border-red-500'); throw new Error(`Invalid ${key} time`); } else { prayerInputs[key]?.classList.remove('border-red-500'); } } prayerTimes = customTimes; localStorage.setItem('qiraaPrayerTimes', JSON.stringify(prayerTimes)); calculateNextPrayer(); updateNextPrayerDisplay(); if (showStatus && saveStatusElem) { saveStatusElem.textContent = 'Custom times saved!'; setTimeout(() => { if(saveStatusElem) saveStatusElem.textContent = ''; }, 3000); } } catch (error) { logError("Save Error", error); if (showStatus && saveStatusElem) { saveStatusElem.textContent = `Error: ${error.message}`; saveStatusElem.className = 'error-message mt-1'; setTimeout(() => { if(saveStatusElem) { saveStatusElem.textContent = ''; saveStatusElem.className = 'status-message text-green-600 mt-1'; } }, 5000); } } finally { if(loadingIndicator) loadingIndicator.style.display = 'none'; if(buttonText) buttonText.style.display = 'inline'; if(saveButton) saveButton.disabled = false; } }
+        function calculateNextPrayer() { if(!nextPrayerErrorElem) return; nextPrayerErrorElem.textContent = ''; try { const now = new Date(); const currentTimeMinutes = now.getHours() * 60 + now.getMinutes(); logDebug(`Calculating next prayer. Current time: ${formatTime(now)} (${currentTimeMinutes} mins)`); if (!prayerTimes || Object.keys(prayerTimes).length === 0) { logError("Cannot calculate next prayer: prayerTimes object is empty or invalid."); nextPrayer = null; nextPrayerErrorElem.textContent = 'Load/Save times first.'; return; } let potentialPrayers = Object.entries(prayerTimes).map(([name, time]) => { if (time && /^\d{2}:\d{2}$/.test(time)) { const [h, m] = time.split(':').map(Number); if (h < 24 && m < 60) return { name, time, timeMinutes: h * 60 + m }; } logDebug(`Invalid time format found for ${name}: ${time}`); return null; }).filter(p => p !== null); if (potentialPrayers.length === 0) { nextPrayer = null; nextPrayerErrorElem.textContent = 'No valid prayer times set.'; logDebug("No valid prayer times after filtering."); return; } potentialPrayers.sort((a, b) => a.timeMinutes - b.timeMinutes); logDebug("Sorted valid prayer times:", potentialPrayers); let nextPrayerObj = potentialPrayers.find(p => p.timeMinutes > currentTimeMinutes); let isTomorrow = false; if (!nextPrayerObj) { nextPrayerObj = potentialPrayers[0]; isTomorrow = true; logDebug("Next prayer is tomorrow's first prayer."); } nextPrayer = { name: nextPrayerObj.name, time: nextPrayerObj.time, timeMinutes: nextPrayerObj.timeMinutes, isTomorrow: isTomorrow }; logDebug("Next prayer calculated:", nextPrayer); } catch (error) { logError('Calc Error', error); nextPrayerErrorElem.textContent = 'Error calculating.'; nextPrayer = null; } }
+        function updateNextPrayerDisplay() { logDebug("Updating next prayer display. Current nextPrayer:", nextPrayer); if (nextPrayer && nextPrayer.time) { if(nextPrayerNameElem) nextPrayerNameElem.textContent = nextPrayer.name; if(nextPrayerTimeElem) nextPrayerTimeElem.textContent = `at ${nextPrayer.time}`; if(nextPrayerErrorElem) nextPrayerErrorElem.textContent = ''; } else { if(nextPrayerNameElem) nextPrayerNameElem.textContent = '-'; if(nextPrayerTimeElem) nextPrayerTimeElem.textContent = 'Set valid times'; if (nextPrayerErrorElem && !nextPrayerErrorElem.textContent) nextPrayerErrorElem.textContent = 'Could not determine.'; } updateClock(); }
+        function checkPrayerTime() { if (!nextPrayer || !nextPrayer.time || nextPrayer.isTomorrow) return; try { const now = new Date(); const currentTimeString = formatTime(now); logDebug(`Checking prayer time: ${currentTimeString} vs ${nextPrayer.time}`); if (currentTimeString === nextPrayer.time) { logDebug(`Prayer Time Match: ${nextPrayer.name}`); showBrowserNotification(nextPrayer.name); showPopup(nextPrayer.name); setTimeout(() => { logDebug("Recalculating prayer after alert timeout"); calculateNextPrayer(); updateNextPrayerDisplay(); }, 61000); } } catch (error) { logError("Check Time Error", error); } }
+        function updateUiDisplayAndButtonState() { let notifText = ''; let notifColor = 'text-gray-500'; let audioText = ''; let audioColor = 'text-gray-500'; let buttonDisabled = false; let buttonOpacity = ''; if (!('Notification' in window)) { notifText = 'Browser Notifications: Not supported.'; notifColor = 'text-red-600'; } else { switch (notificationPermission) { case 'granted': notifText = 'Browser Notifications: Enabled.'; notifColor = 'text-green-600'; break; case 'denied': notifText = 'Browser Notifications: Blocked by browser settings.'; notifColor = 'text-red-600'; break; default: notifText = 'Browser Notifications: Permission needed.'; notifColor = 'text-gray-500'; break; } } if (audioContextStarted) { audioText = 'In-App Audio Alert: Ready.'; audioColor = 'text-green-600'; } else { audioText = 'In-App Audio Alert: Not ready (Click button).'; audioColor = 'text-gray-500'; } if (notificationPermission === 'denied' && audioContextStarted) { audioText += " (In-app popup should still work)"; } else if (notificationPermission === 'denied' && !audioContextStarted) { audioText += " (In-app popup needs audio ready)"; } if (notificationPermission === 'denied') { buttonDisabled = true; buttonOpacity = 'opacity-50 cursor-not-allowed'; } else if (notificationPermission === 'granted' && audioContextStarted) { buttonDisabled = true; buttonOpacity = 'opacity-50 cursor-not-allowed'; } else { buttonDisabled = false; buttonOpacity = ''; } if(notificationStatusElem) notificationStatusElem.textContent = notifText; if(notificationStatusElem) notificationStatusElem.className = `status-message ${notifColor} mt-2`; if(audioStatusElem) audioStatusElem.textContent = audioText; if(audioStatusElem) audioStatusElem.className = `status-message ${audioColor} mt-1`; if(enableNotificationsButton) enableNotificationsButton.disabled = buttonDisabled; if(enableNotificationsButton) enableNotificationsButton.className = `bg-teal-500 hover:bg-teal-600 text-white font-semibold py-2 px-4 rounded-lg shadow transition duration-200 ease-in-out inline-flex items-center ${buttonOpacity}`; }
+        function handleLocationRequest() { if (!locationStatusElem) return; locationStatusElem.textContent = "Requesting location..."; locationStatusElem.className = "status-message text-gray-500"; if (!navigator.geolocation) { locationStatusElem.textContent = "Geolocation is not supported."; locationStatusElem.className = "error-message"; return; } navigator.geolocation.getCurrentPosition( (position) => { const lat = position.coords.latitude; const lon = position.coords.longitude; locationStatusElem.innerHTML = `Location found: Lat: ${lat.toFixed(4)}, Lon: ${lon.toFixed(4)}<br><span class="text-sm text-orange-600 font-medium">Note: Please use this to look up prayer times online and enter them manually above.</span>`; locationStatusElem.className = "status-message text-green-600"; }, (error) => { let message = "Could not get location: "; switch(error.code) { case error.PERMISSION_DENIED: message += "Permission denied."; break; case error.POSITION_UNAVAILABLE: message += "Location unavailable."; break; case error.TIMEOUT: message += "Request timed out."; break; default: message += `Unknown error (Code ${error.code}).`; break; } logError("Geolocation Error", error); locationStatusElem.textContent = message; locationStatusElem.className = "error-message"; }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 } ); }
+        function updateClock() { logDebug("updateClock running..."); try { const now = new Date(); if (currentTimeElem) { currentTimeElem.textContent = formatTimeWithSeconds(now); } else { return; } if (nextPrayer && nextPrayer.time && typeof nextPrayer.time === 'string') { if (timeRemainingElem) { const currentTotalSeconds = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds(); const timeParts = nextPrayer.time.split(':'); if (timeParts.length === 2) { const nextHours = parseInt(timeParts[0], 10); const nextMinutes = parseInt(timeParts[1], 10); if (!isNaN(nextHours) && !isNaN(nextMinutes)) { const nextPrayerTotalSeconds = nextHours * 3600 + nextMinutes * 60; let diffSeconds = nextPrayer.isTomorrow ? ( (24 * 3600 - currentTotalSeconds) + nextPrayerTotalSeconds ) : ( nextPrayerTotalSeconds - currentTotalSeconds ); if (diffSeconds < 0) diffSeconds = 0; const hoursLeft = Math.floor(diffSeconds / 3600); const minutesLeft = Math.floor((diffSeconds % 3600) / 60); const secondsLeft = diffSeconds % 60; timeRemainingElem.textContent = `${String(hoursLeft).padStart(2, '0')}:${String(minutesLeft).padStart(2, '0')}:${String(secondsLeft).padStart(2, '0')} remaining`; timeRemainingElem.className = 'text-lg text-emerald-500 mt-2 font-medium tabular-nums'; } else { throw new Error(`Parsed NaN from time: ${nextPrayer.time}`); } } else { throw new Error(`Invalid time format: ${nextPrayer.time}`); } } } else { logDebug("UpdateClock: No valid nextPrayer data for countdown."); if (timeRemainingElem) { timeRemainingElem.textContent = '--:--:-- remaining'; timeRemainingElem.className = 'text-lg text-gray-400 mt-2 font-medium tabular-nums'; } } } catch(error) { logError("Error inside updateClock", error); if (currentTimeElem) currentTimeElem.textContent = 'Error'; if (timeRemainingElem) timeRemainingElem.textContent = 'Error'; } }
+
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            logDebug("DOM Loaded. Initializing App...");
+            try {
+                if (!initializeDOMElements()) { document.body.innerHTML = '<div class="p-4 text-red-700 bg-red-100 border border-red-400 rounded">Critical error: Required HTML elements missing. Check console.</div>'; return; }
+                if (isSpeechApiAvailable) { if (window.speechSynthesis.getVoices().length > 0) voicesLoaded = true; window.speechSynthesis.onvoiceschanged = () => { voicesLoaded = true; }; }
+                if ('Notification' in window) { notificationPermission = Notification.permission; }
+                try { loadPrayerTimes(); } catch (e) { logError("Error during loadPrayerTimes", e); }
+                try { calculateNextPrayer(); } catch (e) { logError("Error during calculateNextPrayer", e); }
+                try { updateNextPrayerDisplay(); } catch (e) { logError("Error during updateNextPrayerDisplay", e); }
+                try { updateUiDisplayAndButtonState(); } catch (e) { logError("Error during updateUiDisplayAndButtonState", e); }
+                try { updateMainReminderDisplay(); } catch (e) { logError("Error during updateMainReminderDisplay", e); }
+                if (clockInterval) clearInterval(clockInterval); if (checkPrayerInterval) clearInterval(checkPrayerInterval); if (mainReminderInterval) clearInterval(mainReminderInterval);
+                clockInterval = setInterval(updateClock, 1000); logDebug("Clock interval setup completed.");
+                checkPrayerInterval = setInterval(checkPrayerTime, 30000);
+                mainReminderInterval = setInterval(updateMainReminderDisplay, REMINDER_REFRESH_INTERVAL);
+                if(saveButton) saveButton.addEventListener('click', () => savePrayerTimes(true)); else logError("Save button not found for listener");
+                if(enableNotificationsButton) enableNotificationsButton.addEventListener('click', requestNotificationPermission); else logError("Enable notifications button not found for listener");
+                if(closePopupButton) closePopupButton.addEventListener('click', hidePopup); else logError("Close popup button not found for listener");
+                if(refreshReminderButton) refreshReminderButton.addEventListener('click', updateMainReminderDisplay); else logError("Refresh reminder button not found for listener");
+                if(useLocationButton) useLocationButton.addEventListener('click', handleLocationRequest); else logError("Use location button not found for listener");
+                if(testPopupButton) { testPopupButton.addEventListener('click', () => { logDebug("Test Popup button clicked"); if (!audioContextStarted) { initAudio().then(ready => { if (ready) { showPopup('Test Prayer'); } else { alert("Audio context failed. Click 'Check/Enable...' button first."); } }); } else { showPopup('Test Prayer'); } }); } else { logError("Test popup button not found for listener"); }
+                Object.values(prayerInputs).forEach((input, index) => { const key = Object.keys(prayerInputs)[index]; if(input) { input.addEventListener('input', () => { calculateNextPrayer(); updateNextPrayerDisplay(); if(saveStatusElem) saveStatusElem.textContent = ''; input.classList.remove('border-red-500'); }); } else { logError(`Prayer input element '${key}' not found for listener`); } });
+                logDebug("Initialization complete.");
+            } catch (error) { logError("Critical Initialization Error", error); document.body.innerHTML = `<div class="p-4 text-red-700 bg-red-100 border border-red-400 rounded">Critical error during initialization: ${error.message}. Check console.</div>`; if (clockInterval) clearInterval(clockInterval); if (checkPrayerInterval) clearInterval(checkPrayerInterval); if (mainReminderInterval) clearInterval(mainReminderInterval); }
+        });
+    </script>
+
+</body>
+</html>
